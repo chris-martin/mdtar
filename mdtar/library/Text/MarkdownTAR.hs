@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fdefer-typed-holes #-}
+
 {-# LANGUAGE OverloadedStrings #-}
 
 module Text.MarkdownTAR where
@@ -12,8 +14,13 @@ import Data.Attoparsec.Text (Parser)
 import qualified Data.Text as T
 import Data.Text (Text)
 
-pCodeBlock :: Parser Text
-pCodeBlock =
+pCode :: Parser Text
+pCode =
+
+    pCodeFenced <|> pCodeIndented
+
+pCodeFenced :: Parser Text
+pCodeFenced =
 
     open *> code <* close
 
@@ -29,6 +36,11 @@ pCodeBlock =
         mfilter (not . (fence `T.isPrefixOf`))
                 (P.takeWhile (not . P.isEndOfLine))
         <* P.endOfLine
+
+pCodeIndented :: Parser Text
+pCodeIndented =
+
+    _
 
 pPath :: Parser Text
 pPath =
