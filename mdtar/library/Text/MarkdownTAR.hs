@@ -18,13 +18,15 @@ pCodeBlock =
     open *> code <* close
 
   where
-    open = P.string "```" *> P.skipWhile (not . P.isEndOfLine) *> P.endOfLine
-    close = P.string "```" *> P.skipMany pHorizontalSpace *> P.endOfLine
+    fence = "```"
+
+    open = P.string fence *> P.skipWhile (not . P.isEndOfLine) *> P.endOfLine
+    close = P.string fence *> P.skipMany pHorizontalSpace *> P.endOfLine
 
     code = fst <$> P.match (P.skipMany lineOfCode)
 
     lineOfCode =
-        mfilter (not . ("```" `T.isPrefixOf`))
+        mfilter (not . (fence `T.isPrefixOf`))
                 (P.takeWhile (not . P.isEndOfLine))
         <* P.endOfLine
 
@@ -39,7 +41,7 @@ pPathHash =
     hashes *> path <* eol
 
   where
-    hashes = P.string "##"
+    hashes = P.string "##" *> mfilter (/= '#') peekChar'
     path = T.strip <$> P.takeWhile1 (not . P.isEndOfLine)
     eol = P.endOfLine
 
