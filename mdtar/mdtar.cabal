@@ -12,3 +12,10 @@ executable mdtar
     hs-source-dirs: executables
     main-is: mdtar.hs
     build-depends: base, mdtar, optparse-applicative
+
+test-suite cases
+    type: exitcode-stdio-1.0
+    hs-source-dirs: test
+    main-is: cases.hs
+    build-depends: base, directory, mdtar
+    other-modules: Paths_mdtar
