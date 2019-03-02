@@ -1,23 +1,82 @@
 {-# OPTIONS_GHC -fdefer-typed-holes #-}
 
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BlockArguments, DeriveFunctor, OverloadedStrings,
+RankNTypes, ScopedTypeVariables #-}
 
-module Text.MarkdownTAR where
+module Text.MarkdownTAR () where
 
+-- base
+import qualified Data.Char as C
 import Control.Applicative ((<|>), many, liftA2)
 import Control.Monad (mfilter)
-import qualified Data.Char as C
-import Data.Foldable (fold)
+import Data.Foldable (fold, for_)
 import Data.Functor (($>))
 import Data.Semigroup (stimes)
+import Data.IORef
 
+-- containers
+import qualified Data.Set as Set
+import Data.Set (Set)
+
+-- attoparsec
 import qualified Data.Attoparsec.Text as P
 import Data.Attoparsec.Text (Parser, endOfLine)
 
+-- text
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Builder as TB
 import Data.Text (Text)
+
+-- pipes
+import qualified Pipes.Prelude as Pipes
+import Pipes
+
+-- filepath
+import System.FilePath as FS
+
+-- directory
+import qualified System.Directory as FS
+
+findFiles :: MonadIO m => FilePath -> Producer' FilePath m ()
+findFiles top = findFiles' (Set.singleton top)
+
+findFiles' :: MonadIO m => Set FilePath -> Producer' FilePath m ()
+findFiles' q =
+    for_ (Set.minView q) \(x, q') ->
+        ifM [ IfM (liftIO (FS.pathIsSymbolicLink x))
+                do
+                  findFiles' q'
+
+            , IfM (liftIO (FS.doesFileExist x))
+                do
+                  yield x
+                  findFiles' q'
+
+            , IfM (liftIO (FS.doesDirectoryExist x))
+                do
+                  q'' <- listDirectory' x
+                  findFiles' (Set.union q' q'')
+
+            ] (fail "Path is neither symlink nor file nor directory")
+
+data IfM m a = IfM (m Bool) (m a) deriving Functor
+
+-- | Select the first action from a list of alternatives.
+ifM :: Monad m
+    => [IfM m a]  -- ^ Possibilities
+    -> m a        -- ^ Action to perform if nothing matched
+    -> m a
+ifM [] a = a
+ifM (IfM cond x : xs) a =
+  do
+    c <- cond
+    if c then x else ifM xs a
+
+listDirectory' :: MonadIO m => FilePath -> m (Set FilePath)
+listDirectory' dir = liftIO $
+    (Set.fromList . (map ((dir ++) . (FS.pathSeparator :))))
+    <$> FS.listDirectory dir
 
 buildText :: TB.Builder -> Text
 buildText = LT.toStrict . TB.toLazyText
