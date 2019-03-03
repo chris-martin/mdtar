@@ -4,18 +4,19 @@
 MultiParamTypeClasses, OverloadedStrings, RankNTypes,
 ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances #-}
 
-module Text.MarkdownTAR () where
+module Text.MarkdownTAR (readDirAsMdtarText) where
 
 -- base
 import qualified Data.Char as C
 import qualified System.IO as IO
 import Control.Applicative ((<|>), many, liftA2)
+import Control.Exception
 import Control.Monad (forever, mfilter)
 import Data.Foldable (fold, for_)
 import Data.Functor (($>))
 import Data.Semigroup (stimes)
 import Data.IORef
-import Prelude hiding ((||), otherwise)
+import Prelude hiding ((||), fail, otherwise)
 
 -- containers
 import qualified Data.Set as Set
@@ -44,6 +45,26 @@ import qualified System.FilePath as FS
 -- directory
 import qualified System.Directory as FS
 
+data Error
+  = NotDirectory FilePath
+  | UnrecognizedFileType FilePath
+  | ContainsFence FilePath
+  deriving (Eq, Show)
+
+instance Exception Error
+  where
+    displayException (NotDirectory x) =
+        "Not a directory: \"" ++ x ++ "\""
+    displayException (UnrecognizedFileType x) =
+        "The file \"" ++ x ++ "\" is neither symlink \
+        \nor regular file nor directory"
+    displayException (ContainsFence x) =
+        "The file \"" ++ x ++ "\" contains a Markdown fence (\"```\") \
+        \which cannot be included within a Markdown TAR"
+
+readDirAsMdtarText :: FilePath -> IO Text
+readDirAsMdtarText dir = _
+
 findFiles :: forall m. MonadIO m => FilePath -> Producer' FilePath' m ()
 findFiles top =
     ifM $
@@ -53,7 +74,7 @@ findFiles top =
               xs <- liftIO (FS.listDirectory top)
               findFiles' (Set.fromList (map (top </>) xs))
 
-       || otherwise (fail ("Not a directory: \"" ++ top ++ "\""))
+       || otherwise (throw (NotDirectory top))
 
 findFiles' :: MonadIO m => Set FilePath' -> Producer' FilePath' m ()
 findFiles' q = for_ (Set.minView q) \(x, q') ->
@@ -75,7 +96,7 @@ findFiles' q = for_ (Set.minView q) \(x, q') ->
               let q'' = Set.fromList (map (x </>) xs)
               findFiles' (Set.union q' q'')
 
-       || otherwise (fail "Path is neither symlink nor file nor directory")
+       || otherwise (throw (UnrecognizedFileType (filePathReal x)))
 
 data IfM m a = IfM (m Bool) (m a)
 
@@ -166,8 +187,7 @@ readToMarkdownTAR_1 x =
                 let t' = t <> LT.fromStrict chunk
 
                 if LT.isInfixOf forbiddenText t'
-                  then fail "A file including a Markdown fence (\"```\") \
-                            \cannot be included within a Markdown TAR"
+                  then throw (ContainsFence (filePathReal x))
                   else
                     do
                       yield chunk
