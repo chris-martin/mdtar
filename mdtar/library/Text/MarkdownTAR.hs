@@ -7,42 +7,60 @@ ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances #-}
 module Text.MarkdownTAR (readDirAsMdtarText) where
 
 -- base
+
 import qualified Data.Char as C
 import qualified System.IO as IO
-import Control.Applicative ((<|>), many, liftA2)
-import Control.Exception
-import Control.Monad (forever, mfilter, unless)
-import Data.Foldable (fold, for_)
-import Data.Functor (($>))
-import Data.Semigroup (stimes)
-import Data.IORef
-import Prelude hiding ((||), fail, otherwise)
+
+import Control.Applicative ((<|>), many, liftA2, (*>), (<*), (<*>))
+import Control.Exception   (Exception, throw)
+import Control.Monad       (Monad (return), forever, mfilter, unless)
+import Data.Bool           (Bool, not, (&&))
+import Data.Char           (Char)
+import Data.Eq             (Eq, (==), (/=))
+import Data.Foldable       (fold, for_)
+import Data.Function       (($), (.))
+import Data.Functor        ((<$>))
+import Data.List           ((++), map)
+import Data.Monoid         (Monoid (mempty))
+import Data.Ord            (Ord)
+import Data.Semigroup      (stimes, Semigroup ((<>)))
+import Prelude             ((-))
+import System.IO           (IO, FilePath)
+import Text.Show           (Show)
 
 -- containers
+
 import qualified Data.Set as Set
+
 import Data.Set (Set)
 
 -- attoparsec
+
 import qualified Data.Attoparsec.Text as P
+
 import Data.Attoparsec.Text (Parser, endOfLine)
 
 -- text
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import qualified Data.Text.Lazy as LT
+
+import qualified Data.Text              as T
+import qualified Data.Text.IO           as T
+import qualified Data.Text.Lazy         as LT
 import qualified Data.Text.Lazy.Builder as TB
+
 import Data.Text (Text)
 
--- pipes
-import qualified Pipes.Prelude as Pipes
+-- pipes et al
+
+import qualified Pipes.Attoparsec   as Pipes
+import qualified Pipes.Parse        as Pipes
+import qualified Pipes.Prelude      as Pipes
 import qualified Pipes.Safe.Prelude as Pipes
 import Pipes
 import Pipes.Safe
 
--- filepath
-import qualified System.FilePath as FS
+-- filepath, directory
 
--- directory
+import qualified System.FilePath  as FS
 import qualified System.Directory as FS
 
 data Error
@@ -168,14 +186,13 @@ instance PathJoin FilePath' FilePath
 
 newline :: Text
 newline =
-  case IO.nativeNewline of
-    IO.LF   -> "\n"
-    IO.CRLF -> "\r\n"
+    case IO.nativeNewline of
+        IO.LF   -> "\n"
+        IO.CRLF -> "\r\n"
 
 readToMarkdownTAR_1 :: MonadSafe m => FilePath' -> Producer' Text m ()
 readToMarkdownTAR_1 x =
   do
-    liftIO (print x)
     yield "## "
     yield (T.pack (filePathAlias x))
     yield newline
@@ -232,7 +249,10 @@ foldMany :: Monoid a => Parser a -> Parser a
 foldMany p = fold <$> many p
 
 match :: Parser a -> Parser Text
-match p = fst <$> P.match p
+match p =
+  do
+    (txt, _) <- P.match p
+    return txt
 
 pCode :: Parser Text
 pCode =
@@ -268,7 +288,7 @@ pCodeIndented =
     return (buildText (firstLine <> subsequentLines))
 
   where
-    emptyLine = many pHorizontalSpace *> endOfLine $> (mempty :: TB.Builder)
+    emptyLine = many pHorizontalSpace *> endOfLine *> return (mempty :: TB.Builder)
     takeLine = TB.fromText <$> match (P.skipWhile (not . P.isEndOfLine) *> endOfLine)
 
 pIndentation :: Parser Text

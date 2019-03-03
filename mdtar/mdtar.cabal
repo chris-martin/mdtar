@@ -15,6 +15,7 @@ library
       , filepath
       , pipes
       , pipes-attoparsec
+      , pipes-parse
       , pipes-safe
       , text
 
