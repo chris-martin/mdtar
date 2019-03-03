@@ -45,39 +45,41 @@ import qualified System.Directory as FS
 
 findFiles :: MonadIO m => FilePath -> Producer' FilePath' m ()
 findFiles top =
-  do
-    isDir <- liftIO (FS.doesDirectoryExist top)
-    if isDir
-      then
-        do
-          xs <- liftIO (FS.listDirectory top)
-          findFiles' (Set.fromList (map (top </>) xs))
-      else
-        fail ("Not a directory: \"" ++ top ++ "\"")
+
+    ifM
+        [ liftIO (FS.doesDirectoryExist top) |>
+            do
+              xs <- liftIO (FS.listDirectory top)
+              findFiles' (Set.fromList (map (top </>) xs))
+
+        ]   do
+              fail ("Not a directory: \"" ++ top ++ "\"")
 
 findFiles' :: MonadIO m => Set FilePath' -> Producer' FilePath' m ()
-findFiles' q = for_ (Set.minView q) \(x, q') -> ifM
+findFiles' q = for_ (Set.minView q) \(x, q') ->
+                                                        q
+    ifM
+        -- At the moment for simplicity we're ignoring symlinks.
+        [ liftIO (FS.pathIsSymbolicLink (filePathReal x)) |>
+              findFiles' q'
 
-    -- At the moment for simplicity we're ignoring symlinks.
-    [ IfM (liftIO (FS.pathIsSymbolicLink (filePathReal x)))
+        , liftIO (FS.doesFileExist (filePathReal x)) |>
+            do
+              yield x
+              findFiles' q'
 
-        do
-          findFiles' q'
+        , liftIO (FS.doesDirectoryExist (filePathReal x)) |>
+            do
+              xs <- liftIO (FS.listDirectory (filePathReal x))
+              let q'' = Set.fromList (map (x </>) xs)
+              findFiles' (Set.union q' q'')
 
-    , IfM (liftIO (FS.doesFileExist (filePathReal x)))
-        do
-          yield x
-          findFiles' q'
-
-    , IfM (liftIO (FS.doesDirectoryExist (filePathReal x)))
-        do
-          xs <- liftIO (FS.listDirectory (filePathReal x))
-          let q'' = Set.fromList (map (x </>) xs)
-          findFiles' (Set.union q' q'')
-
-    ] (fail "Path is neither symlink nor file nor directory")
+        ]   do
+              fail "Path is neither symlink nor file nor directory"
 
 data IfM m a = IfM (m Bool) (m a) deriving Functor
+
+(|>) = IfM
 
 -- | Select the first action from a list of alternatives.
 ifM :: Monad m
