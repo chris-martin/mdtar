@@ -48,7 +48,8 @@ findFiles :: forall m. MonadIO m => FilePath -> Producer' FilePath' m ()
 findFiles top =
     ifM $
 
-          liftIO (FS.doesDirectoryExist top) |> do
+          liftIO (FS.doesDirectoryExist top) |>
+            do
               xs <- liftIO (FS.listDirectory top)
               findFiles' (Set.fromList (map (top </>) xs))
 
@@ -63,11 +64,13 @@ findFiles' q = for_ (Set.minView q) \(x, q') ->
           liftIO (FS.pathIsSymbolicLink (filePathReal x)) |>
               findFiles' q'
 
-       || liftIO (FS.doesFileExist (filePathReal x)) |> do
+       || liftIO (FS.doesFileExist (filePathReal x)) |>
+            do
               yield x
               findFiles' q'
 
-       || liftIO (FS.doesDirectoryExist (filePathReal x)) |> do
+       || liftIO (FS.doesDirectoryExist (filePathReal x)) |>
+            do
               xs <- liftIO (FS.listDirectory (filePathReal x))
               let q'' = Set.fromList (map (x </>) xs)
               findFiles' (Set.union q' q'')
