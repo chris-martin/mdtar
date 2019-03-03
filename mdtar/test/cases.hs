@@ -11,6 +11,9 @@ import Control.Monad.IO.Class
 import System.IO
 import System.Exit
 
+-- containers
+import Data.Map (Map)
+
 -- mdtar
 import qualified Text.MarkdownTAR as MT
 
@@ -36,11 +39,16 @@ group = Group "Text.MarkdownTAR" tests
 
 tests :: [(PropertyName, Property)]
 tests =
-  [ testCase "Single file, tar creation"
+  [ testCase "Single file, producing mdtar format"
       do
-        tarText <- readDirAsMdtarText "test/cases/single-file/expanded"
-        expectedResult <- readTextFile "test/cases/single-file/tar.md"
-        tarText === expectedResult
+        a <- readDirAsMdtarText "test/cases/single-file/expanded"
+        b <- readTextFile "test/cases/single-file/tar.md"
+        a === b
+  , testCase "Single file, consuming mdtar format"
+      do
+        a <- readDirAsMap "test/cases/single-file/expanded"
+        b <- readMdtarFileAsMap "test/cases/single-file/tar.md"
+        a === b
   ]
 
 testCase :: PropertyName -> PropertyT IO () -> (PropertyName, Property)
@@ -51,3 +59,9 @@ readTextFile fp = liftIO (LT.readFile =<< getDataFileName fp)
 
 readDirAsMdtarText :: MonadIO m => FilePath -> m LT.Text
 readDirAsMdtarText fp = liftIO (MT.readDirAsMdtarText =<< getDataFileName fp)
+
+readDirAsMap :: MonadIO m => FilePath -> m (Map FilePath LT.Text)
+readDirAsMap fp = liftIO (MT.readDirAsMap =<< getDataFileName fp)
+
+readMdtarFileAsMap :: MonadIO m => FilePath -> m (Map FilePath LT.Text)
+readMdtarFileAsMap fp = liftIO (MT.readMdtarFileAsMap =<< getDataFileName fp)

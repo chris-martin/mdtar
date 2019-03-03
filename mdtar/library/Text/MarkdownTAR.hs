@@ -7,6 +7,7 @@ ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances #-}
 module Text.MarkdownTAR
   ( readDirAsMdtarText
   , readDirAsMap
+  , readMdtarFileAsMap
   ) where
 
 -- base
@@ -100,6 +101,10 @@ readDirAsMap dir =
         return (filePathAlias x, content)
 
     return (Map.fromList mappings)
+
+readMdtarFileAsMap :: FilePath -> IO (Map FilePath LT.Text)
+readMdtarFileAsMap fp =
+    _
 
 readDirAsMdtarText :: FilePath -> IO LT.Text
 readDirAsMdtarText dir =

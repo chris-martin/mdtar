@@ -36,6 +36,7 @@ test-suite cases
 
     build-depends:
         base
+      , containers
       , hedgehog
       , mdtar
       , text
