@@ -6,7 +6,7 @@ version: 0
 library
     hs-source-dirs: library
     exposed-modules: Text.MarkdownTAR
-    build-depends: attoparsec, base, containers, directory, filepath, pipes, pipes-attoparsec, text
+    build-depends: attoparsec, base, containers, directory, filepath, pipes, pipes-attoparsec, pipes-safe, text
 
 executable mdtar
     hs-source-dirs: executables

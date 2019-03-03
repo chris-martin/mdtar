@@ -1,14 +1,16 @@
 {-# OPTIONS_GHC -fdefer-typed-holes #-}
 
-{-# LANGUAGE BlockArguments, DeriveFunctor, OverloadedStrings,
-RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE BlockArguments, DeriveFunctor, LambdaCase,
+MultiParamTypeClasses, OverloadedStrings, RankNTypes,
+ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances #-}
 
 module Text.MarkdownTAR () where
 
 -- base
 import qualified Data.Char as C
+import qualified System.IO as IO
 import Control.Applicative ((<|>), many, liftA2)
-import Control.Monad (mfilter)
+import Control.Monad (forever, mfilter)
 import Data.Foldable (fold, for_)
 import Data.Functor (($>))
 import Data.Semigroup (stimes)
@@ -24,41 +26,56 @@ import Data.Attoparsec.Text (Parser, endOfLine)
 
 -- text
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import qualified Data.Text.Lazy as LT
 import qualified Data.Text.Lazy.Builder as TB
 import Data.Text (Text)
 
 -- pipes
 import qualified Pipes.Prelude as Pipes
+import qualified Pipes.Safe.Prelude as Pipes
 import Pipes
+import Pipes.Safe
 
 -- filepath
-import System.FilePath as FS
+import qualified System.FilePath as FS
 
 -- directory
 import qualified System.Directory as FS
 
-findFiles :: MonadIO m => FilePath -> Producer' FilePath m ()
-findFiles top = findFiles' (Set.singleton top)
+findFiles :: MonadIO m => FilePath -> Producer' FilePath' m ()
+findFiles top =
+  do
+    isDir <- liftIO (FS.doesDirectoryExist top)
+    if isDir
+      then
+        do
+          xs <- liftIO (FS.listDirectory top)
+          findFiles' (Set.fromList (map (top </>) xs))
+      else
+        fail ("Not a directory: \"" ++ top ++ "\"")
 
-findFiles' :: MonadIO m => Set FilePath -> Producer' FilePath m ()
-findFiles' q =
-    for_ (Set.minView q) \(x, q') ->
-        ifM [ IfM (liftIO (FS.pathIsSymbolicLink x))
-                do
-                  findFiles' q'
+findFiles' :: MonadIO m => Set FilePath' -> Producer' FilePath' m ()
+findFiles' q = for_ (Set.minView q) \(x, q') -> ifM
 
-            , IfM (liftIO (FS.doesFileExist x))
-                do
-                  yield x
-                  findFiles' q'
+    -- At the moment for simplicity we're ignoring symlinks.
+    [ IfM (liftIO (FS.pathIsSymbolicLink (filePathReal x)))
 
-            , IfM (liftIO (FS.doesDirectoryExist x))
-                do
-                  q'' <- listDirectory' x
-                  findFiles' (Set.union q' q'')
+        do
+          findFiles' q'
 
-            ] (fail "Path is neither symlink nor file nor directory")
+    , IfM (liftIO (FS.doesFileExist (filePathReal x)))
+        do
+          yield x
+          findFiles' q'
+
+    , IfM (liftIO (FS.doesDirectoryExist (filePathReal x)))
+        do
+          xs <- liftIO (FS.listDirectory (filePathReal x))
+          let q'' = Set.fromList (map (x </>) xs)
+          findFiles' (Set.union q' q'')
+
+    ] (fail "Path is neither symlink nor file nor directory")
 
 data IfM m a = IfM (m Bool) (m a) deriving Functor
 
@@ -73,10 +90,94 @@ ifM (IfM cond x : xs) a =
     c <- cond
     if c then x else ifM xs a
 
-listDirectory' :: MonadIO m => FilePath -> m (Set FilePath)
-listDirectory' dir = liftIO $
-    (Set.fromList . (map ((dir ++) . (FS.pathSeparator :))))
-    <$> FS.listDirectory dir
+data FilePath' =
+  FilePath'
+    { filePathReal :: FilePath
+        -- ^ Where to find the file within the filesystem
+    , filePathAlias :: FilePath
+        -- ^ What to call the file in the mdtar output
+    }
+  deriving (Eq, Ord)
+
+class PathJoin a b
+  where
+    (</>) :: a -> b -> FilePath'
+
+instance PathJoin FilePath FilePath
+  where
+    base </> rel =
+      FilePath'
+        { filePathReal = base FS.</> rel
+        , filePathAlias = rel
+        }
+
+instance PathJoin FilePath' FilePath'
+  where
+    base </> rel =
+      FilePath'
+        { filePathReal  = filePathReal  base FS.</> filePathReal  rel
+        , filePathAlias = filePathAlias base FS.</> filePathAlias rel
+        }
+
+instance PathJoin FilePath' FilePath
+  where
+    base </> rel =
+      FilePath'
+        { filePathReal  = filePathReal  base FS.</> rel
+        , filePathAlias = filePathAlias base FS.</> rel
+        }
+
+newline :: Text
+newline =
+  case IO.nativeNewline of
+    IO.LF   -> "\n"
+    IO.CRLF -> "\r\n"
+
+readToMarkdownTAR_1 :: MonadSafe m => FilePath' -> Producer' Text m ()
+readToMarkdownTAR_1 x =
+  do
+    yield "## "
+    yield (T.pack (filePathAlias x))
+    yield newline
+    yield newline
+    yield "```"
+    yield newline
+
+    Pipes.withFile (filePathReal x) IO.ReadMode \h ->
+        let
+            go t =
+              do
+                chunk <- liftIO (T.hGetChunk h)
+
+                let t' = t <> LT.fromStrict chunk
+
+                if LT.isInfixOf forbiddenText t'
+                  then fail "A file including a Markdown fence (\"```\") \
+                            \cannot be included within a Markdown TAR"
+                  else
+                    do
+                      yield chunk
+                      let t'' = LT.takeEnd (LT.length forbiddenText - 1) t'
+                      go t''
+        in
+            go "\n"
+
+    yield "```"
+    yield newline
+
+  where
+    forbiddenText = "\n```"
+
+readToMarkdownTAR_n :: MonadSafe m => Pipe FilePath' Text m ()
+readToMarkdownTAR_n =
+  do
+    x <- await
+    readToMarkdownTAR_1 x
+    forever
+      do
+        x <- await
+        yield newline
+        readToMarkdownTAR_1 x
 
 buildText :: TB.Builder -> Text
 buildText = LT.toStrict . TB.toLazyText
