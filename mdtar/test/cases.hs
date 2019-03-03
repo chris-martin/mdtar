@@ -46,8 +46,8 @@ tests =
         a === b
   , testCase "Single file, consuming mdtar format"
       do
-        a <- readDirAsMap "test/cases/single-file/expanded"
-        b <- readMdtarFileAsMap "test/cases/single-file/tar.md"
+        a <- readDirAsList "test/cases/single-file/expanded"
+        b <- readMdtarFileAsList "test/cases/single-file/tar.md"
         a === b
   ]
 
@@ -60,8 +60,8 @@ readTextFile fp = liftIO (LT.readFile =<< getDataFileName fp)
 readDirAsMdtarText :: MonadIO m => FilePath -> m LT.Text
 readDirAsMdtarText fp = liftIO (MT.readDirAsMdtarText =<< getDataFileName fp)
 
-readDirAsMap :: MonadIO m => FilePath -> m (Map FilePath LT.Text)
-readDirAsMap fp = liftIO (MT.readDirAsMap =<< getDataFileName fp)
+readDirAsList :: MonadIO m => FilePath -> m [(FilePath, LT.Text)]
+readDirAsList fp = liftIO (MT.readDirAsList =<< getDataFileName fp)
 
-readMdtarFileAsMap :: MonadIO m => FilePath -> m (Map FilePath LT.Text)
-readMdtarFileAsMap fp = liftIO (MT.readMdtarFileAsMap =<< getDataFileName fp)
+readMdtarFileAsList :: MonadIO m => FilePath -> m [(FilePath, LT.Text)]
+readMdtarFileAsList fp = liftIO (MT.readMdtarFileAsList =<< getDataFileName fp)

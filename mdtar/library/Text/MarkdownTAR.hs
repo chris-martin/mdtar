@@ -6,8 +6,8 @@ ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances #-}
 
 module Text.MarkdownTAR
   ( readDirAsMdtarText
-  , readDirAsMap
-  , readMdtarFileAsMap
+  , readDirAsList
+  , readMdtarFileAsList
   ) where
 
 -- base
@@ -90,20 +90,20 @@ instance Exception Error
         "The file \"" ++ x ++ "\" contains a Markdown fence (\"```\") \
         \which cannot be included within a Markdown TAR"
 
-readDirAsMap :: FilePath -> IO (Map FilePath LT.Text)
-readDirAsMap dir =
-  do
-    files <- runSafeT $ Pipes.toListM (findFiles dir) :: IO [FilePath']
+readDirAsList :: FilePath -> IO [(FilePath, LT.Text)]
+readDirAsList dir =
+  (runSafeT . Pipes.toListM)
+  (
+      findFiles dir
+      >->
+      Pipes.mapM \x -> liftIO
+        do
+          content <- LT.readFile (filePathReal x)
+          return (filePathAlias x, content)
+  )
 
-    mappings <- for files \x ->
-      do
-        content <- LT.readFile (filePathReal x)
-        return (filePathAlias x, content)
-
-    return (Map.fromList mappings)
-
-readMdtarFileAsMap :: FilePath -> IO (Map FilePath LT.Text)
-readMdtarFileAsMap fp =
+readMdtarFileAsList :: FilePath -> IO [(FilePath, LT.Text)]
+readMdtarFileAsList fp =
     _
 
 readDirAsMdtarText :: FilePath -> IO LT.Text
