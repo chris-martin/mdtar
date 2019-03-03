@@ -35,5 +35,6 @@ test-suite cases
 
     build-depends:
         base
-      , directory
+      , hedgehog
       , mdtar
+      , text

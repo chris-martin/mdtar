@@ -1,4 +1,4 @@
-## `hello.txt`
+## hello.txt
 
 ```
 Hello!

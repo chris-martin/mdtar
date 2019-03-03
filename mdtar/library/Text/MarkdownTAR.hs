@@ -11,7 +11,7 @@ import qualified Data.Char as C
 import qualified System.IO as IO
 import Control.Applicative ((<|>), many, liftA2)
 import Control.Exception
-import Control.Monad (forever, mfilter)
+import Control.Monad (forever, mfilter, unless)
 import Data.Foldable (fold, for_)
 import Data.Functor (($>))
 import Data.Semigroup (stimes)
@@ -62,8 +62,12 @@ instance Exception Error
         "The file \"" ++ x ++ "\" contains a Markdown fence (\"```\") \
         \which cannot be included within a Markdown TAR"
 
-readDirAsMdtarText :: FilePath -> IO Text
-readDirAsMdtarText dir = _
+readDirAsMdtarText :: FilePath -> IO LT.Text
+readDirAsMdtarText dir =
+  runSafeT
+    do
+      chunks <- Pipes.toListM (findFiles dir >-> readToMarkdownTAR_n)
+      return (LT.fromChunks chunks)
 
 findFiles :: forall m. MonadIO m => FilePath -> Producer' FilePath' m ()
 findFiles top =
@@ -132,7 +136,7 @@ data FilePath' =
     , filePathAlias :: FilePath
         -- ^ What to call the file in the mdtar output
     }
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 class PathJoin a b
   where
@@ -171,6 +175,7 @@ newline =
 readToMarkdownTAR_1 :: MonadSafe m => FilePath' -> Producer' Text m ()
 readToMarkdownTAR_1 x =
   do
+    liftIO (print x)
     yield "## "
     yield (T.pack (filePathAlias x))
     yield newline
@@ -183,16 +188,20 @@ readToMarkdownTAR_1 x =
             go t =
               do
                 chunk <- liftIO (T.hGetChunk h)
-
-                let t' = t <> LT.fromStrict chunk
-
-                if LT.isInfixOf forbiddenText t'
-                  then throw (ContainsFence (filePathReal x))
-                  else
-                    do
-                      yield chunk
-                      let t'' = LT.takeEnd (LT.length forbiddenText - 1) t'
-                      go t''
+                unless (T.null chunk) $
+                    let
+                        t' = t <> LT.fromStrict chunk
+                    in
+                        if LT.isInfixOf forbiddenText t'
+                            then throw (ContainsFence (filePathReal x))
+                            else
+                              do
+                                yield chunk
+                                let
+                                    t'' = LT.takeEnd
+                                            (LT.length forbiddenText - 1)
+                                            t'
+                                go t''
         in
             go "\n"
 
