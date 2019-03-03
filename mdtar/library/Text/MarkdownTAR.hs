@@ -4,34 +4,41 @@
 MultiParamTypeClasses, OverloadedStrings, RankNTypes,
 ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances #-}
 
-module Text.MarkdownTAR (readDirAsMdtarText) where
+module Text.MarkdownTAR
+  ( readDirAsMdtarText
+  , readDirAsMap
+  ) where
 
 -- base
 
 import qualified Data.Char as C
 import qualified System.IO as IO
 
-import Control.Applicative ((<|>), many, liftA2, (*>), (<*), (<*>))
-import Control.Exception   (Exception, throw)
-import Control.Monad       (Monad (return), forever, mfilter, unless)
-import Data.Bool           (Bool, not, (&&))
-import Data.Char           (Char)
-import Data.Eq             (Eq, (==), (/=))
-import Data.Foldable       (fold, for_)
-import Data.Function       (($), (.))
-import Data.Functor        ((<$>))
-import Data.List           ((++), map)
-import Data.Monoid         (Monoid (mempty))
-import Data.Ord            (Ord)
-import Data.Semigroup      (stimes, Semigroup ((<>)))
-import Prelude             ((-))
-import System.IO           (IO, FilePath)
-import Text.Show           (Show)
+import Control.Applicative    ((<|>), many, liftA2, (*>), (<*), (<*>))
+import Control.Exception      (Exception (displayException), throw)
+import Control.Monad          (Monad (return), forever, mfilter, unless)
+import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.Bool              (Bool, not, (&&))
+import Data.Char              (Char)
+import Data.Eq                (Eq, (==), (/=))
+import Data.Foldable          (fold, for_)
+import Data.Function          (($), (.))
+import Data.Functor           ((<$>))
+import Data.List              ((++), map)
+import Data.Monoid            (Monoid (mempty))
+import Data.Ord               (Ord)
+import Data.Semigroup         (stimes, Semigroup ((<>)))
+import Data.Traversable       (for)
+import Prelude                ((-))
+import System.IO              (IO, FilePath)
+import Text.Show              (Show)
 
 -- containers
 
+import qualified Data.Map as Map
 import qualified Data.Set as Set
 
+import Data.Map (Map)
 import Data.Set (Set)
 
 -- attoparsec
@@ -45,6 +52,7 @@ import Data.Attoparsec.Text (Parser, endOfLine)
 import qualified Data.Text              as T
 import qualified Data.Text.IO           as T
 import qualified Data.Text.Lazy         as LT
+import qualified Data.Text.Lazy.IO      as LT
 import qualified Data.Text.Lazy.Builder as TB
 
 import Data.Text (Text)
@@ -55,8 +63,9 @@ import qualified Pipes.Attoparsec   as Pipes
 import qualified Pipes.Parse        as Pipes
 import qualified Pipes.Prelude      as Pipes
 import qualified Pipes.Safe.Prelude as Pipes
-import Pipes
-import Pipes.Safe
+
+import Pipes      (Consumer', Pipe, Producer', (>->), await, yield)
+import Pipes.Safe (MonadSafe, runSafeT)
 
 -- filepath, directory
 
@@ -79,6 +88,18 @@ instance Exception Error
     displayException (ContainsFence x) =
         "The file \"" ++ x ++ "\" contains a Markdown fence (\"```\") \
         \which cannot be included within a Markdown TAR"
+
+readDirAsMap :: FilePath -> IO (Map FilePath LT.Text)
+readDirAsMap dir =
+  do
+    files <- runSafeT $ Pipes.toListM (findFiles dir) :: IO [FilePath']
+
+    mappings <- for files \x ->
+      do
+        content <- LT.readFile (filePathReal x)
+        return (filePathAlias x, content)
+
+    return (Map.fromList mappings)
 
 readDirAsMdtarText :: FilePath -> IO LT.Text
 readDirAsMdtarText dir =
