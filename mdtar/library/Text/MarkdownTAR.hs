@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fdefer-typed-holes #-}
 
-{-# LANGUAGE BlockArguments, DeriveFunctor, LambdaCase,
+{-# LANGUAGE BlockArguments, LambdaCase,
 MultiParamTypeClasses, OverloadedStrings, RankNTypes,
 ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances #-}
 
@@ -15,6 +15,7 @@ import Data.Foldable (fold, for_)
 import Data.Functor (($>))
 import Data.Semigroup (stimes)
 import Data.IORef
+import Prelude hiding ((||), otherwise)
 
 -- containers
 import qualified Data.Set as Set
@@ -43,54 +44,62 @@ import qualified System.FilePath as FS
 -- directory
 import qualified System.Directory as FS
 
-findFiles :: MonadIO m => FilePath -> Producer' FilePath' m ()
+findFiles :: forall m. MonadIO m => FilePath -> Producer' FilePath' m ()
 findFiles top =
+    ifM $
 
-    ifM
-        [ liftIO (FS.doesDirectoryExist top) |>
-            do
+          liftIO (FS.doesDirectoryExist top) |> do
               xs <- liftIO (FS.listDirectory top)
               findFiles' (Set.fromList (map (top </>) xs))
 
-        ]   do
-              fail ("Not a directory: \"" ++ top ++ "\"")
+       || otherwise (fail ("Not a directory: \"" ++ top ++ "\""))
 
 findFiles' :: MonadIO m => Set FilePath' -> Producer' FilePath' m ()
 findFiles' q = for_ (Set.minView q) \(x, q') ->
 
-    ifM
+    ifM $
+
         -- At the moment for simplicity we're ignoring symlinks.
-        [ liftIO (FS.pathIsSymbolicLink (filePathReal x)) |>
+          liftIO (FS.pathIsSymbolicLink (filePathReal x)) |>
               findFiles' q'
 
-        , liftIO (FS.doesFileExist (filePathReal x)) |>
-            do
+       || liftIO (FS.doesFileExist (filePathReal x)) |> do
               yield x
               findFiles' q'
 
-        , liftIO (FS.doesDirectoryExist (filePathReal x)) |>
-            do
+       || liftIO (FS.doesDirectoryExist (filePathReal x)) |> do
               xs <- liftIO (FS.listDirectory (filePathReal x))
               let q'' = Set.fromList (map (x </>) xs)
               findFiles' (Set.union q' q'')
 
-        ]   do
-              fail "Path is neither symlink nor file nor directory"
+       || otherwise (fail "Path is neither symlink nor file nor directory")
 
-data IfM m a = IfM (m Bool) (m a) deriving Functor
+data IfM m a = IfM (m Bool) (m a)
 
+data IfM' m a =
+  IfM'
+    [IfM m a]  -- ^ Possibilities
+    (m a)      -- ^ Action to perform if nothing matched
+
+(|>) :: m Bool -> m a -> IfM m a
 (|>) = IfM
 
+(||) :: IfM m a -> IfM' m a -> IfM' m a
+x || IfM' xs a = IfM' (x : xs) a
+
+otherwise :: m a -> IfM' m a
+otherwise = IfM' []
+
+infixr 5 ||
+infix 6 |>
+
 -- | Select the first action from a list of alternatives.
-ifM :: Monad m
-    => [IfM m a]  -- ^ Possibilities
-    -> m a        -- ^ Action to perform if nothing matched
-    -> m a
-ifM [] a = a
-ifM (IfM cond x : xs) a =
+ifM :: Monad m => IfM' m a -> m a
+ifM (IfM' [] a) = a
+ifM (IfM' ((IfM cond x) : xs) a) =
   do
     c <- cond
-    if c then x else ifM xs a
+    if c then x else ifM (IfM' xs a)
 
 data FilePath' =
   FilePath'
