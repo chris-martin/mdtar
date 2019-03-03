@@ -57,7 +57,7 @@ findFiles top =
 
 findFiles' :: MonadIO m => Set FilePath' -> Producer' FilePath' m ()
 findFiles' q = for_ (Set.minView q) \(x, q') ->
-                                                        q
+
     ifM
         -- At the moment for simplicity we're ignoring symlinks.
         [ liftIO (FS.pathIsSymbolicLink (filePathReal x)) |>
