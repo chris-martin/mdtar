@@ -8,7 +8,8 @@ library
     exposed-modules: Text.MarkdownTAR
 
     other-modules:
-        Text.MarkdownTAR.FilePath
+        Text.MarkdownTAR.Attoparsec
+      , Text.MarkdownTAR.FilePath
 
     build-depends:
         attoparsec

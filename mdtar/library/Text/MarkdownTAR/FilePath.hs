@@ -7,6 +7,14 @@ module Text.MarkdownTAR.FilePath where
 
 import qualified System.IO as IO
 
+import Data.Eq                (Eq, (==), (/=))
+import Data.Function          (($), (.))
+import Data.Ord               (Ord)
+import System.IO              (IO, FilePath)
+import Text.Show              (Show)
+
+import Prelude ()
+
 -- filepath, directory
 
 import qualified System.FilePath  as FS
