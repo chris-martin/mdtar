@@ -7,6 +7,9 @@ library
     hs-source-dirs: library
     exposed-modules: Text.MarkdownTAR
 
+    other-modules:
+        Text.MarkdownTAR.FilePath
+
     build-depends:
         attoparsec
       , base

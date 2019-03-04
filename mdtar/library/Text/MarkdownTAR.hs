@@ -1,14 +1,15 @@
 {-# OPTIONS_GHC -fdefer-typed-holes #-}
 
-{-# LANGUAGE BlockArguments, LambdaCase,
-MultiParamTypeClasses, OverloadedStrings, RankNTypes,
-ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE BlockArguments, LambdaCase, OverloadedStrings, RankNTypes,
+             ScopedTypeVariables #-}
 
 module Text.MarkdownTAR
   ( readDirAsMdtarText
   , readDirAsList
   , readMdtarFileAsList
   ) where
+
+import Text.MarkdownTAR.FilePath
 
 -- base
 
@@ -175,49 +176,6 @@ ifM ifs orElse =
       do
         c <- cond
         if c then x else go xs
-
-data FilePath' =
-  FilePath'
-    { filePathReal :: FilePath
-        -- ^ Where to find the file within the filesystem
-    , filePathAlias :: FilePath
-        -- ^ What to call the file in the mdtar output
-    }
-  deriving (Eq, Ord, Show)
-
-class PathJoin a b
-  where
-    (</>) :: a -> b -> FilePath'
-
-instance PathJoin FilePath FilePath
-  where
-    base </> rel =
-      FilePath'
-        { filePathReal = base FS.</> rel
-        , filePathAlias = rel
-        }
-
-instance PathJoin FilePath' FilePath'
-  where
-    base </> rel =
-      FilePath'
-        { filePathReal  = filePathReal  base FS.</> filePathReal  rel
-        , filePathAlias = filePathAlias base FS.</> filePathAlias rel
-        }
-
-instance PathJoin FilePath' FilePath
-  where
-    base </> rel =
-      FilePath'
-        { filePathReal  = filePathReal  base FS.</> rel
-        , filePathAlias = filePathAlias base FS.</> rel
-        }
-
-newline :: Text
-newline =
-    case IO.nativeNewline of
-        IO.LF   -> "\n"
-        IO.CRLF -> "\r\n"
 
 readToMarkdownTAR_1 :: MonadSafe m => FilePath' -> Producer' Text m ()
 readToMarkdownTAR_1 x =
