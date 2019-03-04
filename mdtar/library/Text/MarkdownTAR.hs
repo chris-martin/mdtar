@@ -1,4 +1,6 @@
-{-# OPTIONS_GHC -fdefer-typed-holes #-}
+{-# OPTIONS_GHC -Wall #-}
+
+{-# OPTIONS_GHC -fdefer-typed-holes #-} -- todo: temporary for development
 
 {-# LANGUAGE BlockArguments, LambdaCase, OverloadedStrings, RankNTypes,
              ScopedTypeVariables #-}
@@ -16,38 +18,24 @@ import Text.MarkdownTAR.FilePath
 
 import qualified System.IO as IO
 
-import Control.Applicative    ((<|>), many, liftA2, (*>), (<*), (<*>))
 import Control.Exception      (Exception (displayException), throw)
-import Control.Monad          (Monad (return), forever, mfilter, unless)
+import Control.Monad          (Monad (return), forever, unless)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Bool              (Bool, not, (&&))
-import Data.Char              (Char)
-import Data.Eq                (Eq, (==), (/=))
-import Data.Foldable          (fold, for_)
+import Data.Bool              (Bool)
+import Data.Eq                (Eq)
+import Data.Foldable          (for_)
 import Data.Function          (($), (.))
-import Data.Functor           ((<$>))
 import Data.List              ((++), map)
-import Data.Monoid            (Monoid (mempty))
-import Data.Ord               (Ord)
-import Data.Semigroup         (stimes, Semigroup ((<>)))
-import Data.Traversable       (for)
+import Data.Semigroup         (Semigroup ((<>)))
 import Prelude                ((-))
 import System.IO              (IO, FilePath)
 import Text.Show              (Show)
 
 -- containers
 
-import qualified Data.Map as Map
 import qualified Data.Set as Set
 
-import Data.Map (Map)
 import Data.Set (Set)
-
--- attoparsec
-
-import qualified Data.Attoparsec.Text as P
-
-import Data.Attoparsec.Text (Parser, endOfLine)
 
 -- text
 
@@ -55,7 +43,6 @@ import qualified Data.Text              as T
 import qualified Data.Text.IO           as T
 import qualified Data.Text.Lazy         as LT
 import qualified Data.Text.Lazy.IO      as LT
-import qualified Data.Text.Lazy.Builder as TB
 
 import Data.Text (Text)
 
@@ -66,7 +53,7 @@ import qualified Pipes.Parse        as Pipes
 import qualified Pipes.Prelude      as Pipes
 import qualified Pipes.Safe.Prelude as Pipes
 
-import Pipes      (Consumer', Pipe, Producer', (>->), await, yield)
+import Pipes      (Pipe, Producer', (>->), await, yield)
 import Pipes.Safe (MonadSafe, runSafeT)
 
 -- filepath, directory
@@ -105,7 +92,9 @@ readDirAsList dir =
 
 readMdtarFileAsList :: FilePath -> IO [(FilePath, LT.Text)]
 readMdtarFileAsList fp =
-    _
+  do
+    _ pPath
+    _ pCode
 
 readDirAsMdtarText :: FilePath -> IO LT.Text
 readDirAsMdtarText dir =

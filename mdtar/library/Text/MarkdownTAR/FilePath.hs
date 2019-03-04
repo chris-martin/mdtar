@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wall #-}
+
 -- Extensions for the PathJoin class and its instances
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, TypeSynonymInstances #-}
 

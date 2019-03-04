@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wall #-}
+
 {-# LANGUAGE OverloadedStrings #-}
 
 module Text.MarkdownTAR.Attoparsec where
