@@ -115,63 +115,66 @@ readDirAsMdtarText dir =
 
 findFiles :: forall m. MonadIO m => FilePath -> Producer' FilePath' m ()
 findFiles top =
-    ifM $
 
-          liftIO (FS.doesDirectoryExist top) |>
-            do
-              xs <- liftIO (FS.listDirectory top)
-              findFiles' (Set.fromList (map (top </>) xs))
+    ifM [ifDir] fail
 
-       || otherwise (throw (NotDirectory top))
+  where
+
+    ifDir =
+      liftIO (FS.doesDirectoryExist top) |>
+        do
+          xs <- liftIO (FS.listDirectory top)
+          findFiles' (Set.fromList (map (top </>) xs))
+
+    fail = throw (NotDirectory top)
 
 findFiles' :: MonadIO m => Set FilePath' -> Producer' FilePath' m ()
-findFiles' q = for_ (Set.minView q) \(x, q') ->
+findFiles' q =
 
-    ifM $
+    for_ (Set.minView q) f
 
+  where
+    f (x, q') = ifM [ifLink, ifFile, ifDir] fail
+
+      where
         -- At the moment for simplicity we're ignoring symlinks.
+        ifLink =
           liftIO (FS.pathIsSymbolicLink (filePathReal x)) |>
               findFiles' q'
 
-       || liftIO (FS.doesFileExist (filePathReal x)) |>
+        ifFile =
+          liftIO (FS.doesFileExist (filePathReal x)) |>
             do
               yield x
               findFiles' q'
 
-       || liftIO (FS.doesDirectoryExist (filePathReal x)) |>
+        ifDir =
+          liftIO (FS.doesDirectoryExist (filePathReal x)) |>
             do
               xs <- liftIO (FS.listDirectory (filePathReal x))
               let q'' = Set.fromList (map (x </>) xs)
               findFiles' (Set.union q' q'')
 
-       || otherwise (throw (UnrecognizedFileType (filePathReal x)))
+        fail = throw (UnrecognizedFileType (filePathReal x))
 
 data IfM m a = IfM (m Bool) (m a)
-
-data IfM' m a =
-  IfM'
-    [IfM m a]  -- ^ Possibilities
-    (m a)      -- ^ Action to perform if nothing matched
 
 (|>) :: m Bool -> m a -> IfM m a
 (|>) = IfM
 
-(||) :: IfM m a -> IfM' m a -> IfM' m a
-x || IfM' xs a = IfM' (x : xs) a
-
-otherwise :: m a -> IfM' m a
-otherwise = IfM' []
-
-infixr 5 ||
-infix 6 |>
-
 -- | Select the first action from a list of alternatives.
-ifM :: Monad m => IfM' m a -> m a
-ifM (IfM' [] a) = a
-ifM (IfM' ((IfM cond x) : xs) a) =
-  do
-    c <- cond
-    if c then x else ifM (IfM' xs a)
+ifM :: Monad m => [IfM m a] -> m a -> m a
+ifM ifs orElse =
+
+    go ifs
+
+  where
+
+    go [] = orElse
+    go ((IfM cond x) : xs) =
+      do
+        c <- cond
+        if c then x else go xs
 
 data FilePath' =
   FilePath'
