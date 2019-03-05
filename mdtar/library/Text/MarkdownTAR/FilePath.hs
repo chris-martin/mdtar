@@ -9,13 +9,12 @@ module Text.MarkdownTAR.FilePath where
 
 import qualified System.IO as IO
 
-import Data.Eq                (Eq, (==), (/=))
-import Data.Function          (($), (.))
-import Data.Ord               (Ord)
-import System.IO              (IO, FilePath)
-import Text.Show              (Show)
-
-import Prelude ()
+import Data.Eq       (Eq)
+import Data.Function (($))
+import Data.Ord      (Ord)
+import Prelude       ()
+import System.IO     (FilePath)
+import Text.Show     (Show)
 
 -- filepath, directory
 
@@ -24,11 +23,7 @@ import qualified System.Directory as FS
 
 -- text
 
-import qualified Data.Text              as T
-import qualified Data.Text.IO           as T
-import qualified Data.Text.Lazy         as LT
-import qualified Data.Text.Lazy.IO      as LT
-import qualified Data.Text.Lazy.Builder as TB
+import qualified Data.Text as T
 
 import Data.Text (Text)
 
