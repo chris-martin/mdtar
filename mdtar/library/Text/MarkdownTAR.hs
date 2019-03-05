@@ -106,15 +106,16 @@ readDirAsMdtarText dir =
 findFiles :: forall m. MonadIO m => FilePath -> Producer' FilePath' m ()
 findFiles top =
 
-    ifM [ifDir] fail
+    ifM [(ifDir, go)] fail
 
   where
 
-    ifDir =
-      liftIO (FS.doesDirectoryExist top) |>
-        do
-          xs <- liftIO (FS.listDirectory top)
-          findFiles' (Set.fromList (map (top </>) xs))
+    ifDir = liftIO (FS.doesDirectoryExist top)
+
+    go =
+      do
+        xs <- liftIO (FS.listDirectory top)
+        findFiles' (Set.fromList (map (top </>) xs))
 
     fail = throw (NotDirectory top)
 
@@ -124,36 +125,28 @@ findFiles' q =
     for_ (Set.minView q) f
 
   where
-    f (x, q') = ifM [ifLink, ifFile, ifDir] fail
+
+    -- todo: Currently for simplicity we ignore symlinks.
+
+    f (x, q') = ifM [ (ifLink, ignore), (ifFile, emit), (ifDir, recurse) ] fail
 
       where
-        -- At the moment for simplicity we're ignoring symlinks.
-        ifLink =
-          liftIO (FS.pathIsSymbolicLink (filePathReal x)) |>
-              findFiles' q'
+        ifLink = liftIO $ FS.pathIsSymbolicLink $ filePathReal x
+        ifFile = liftIO $ FS.doesFileExist      $ filePathReal x
+        ifDir  = liftIO $ FS.doesDirectoryExist $ filePathReal x
 
-        ifFile =
-          liftIO (FS.doesFileExist (filePathReal x)) |>
-            do
-              yield x
-              findFiles' q'
-
-        ifDir =
-          liftIO (FS.doesDirectoryExist (filePathReal x)) |>
-            do
-              xs <- liftIO (FS.listDirectory (filePathReal x))
-              let q'' = Set.fromList (map (x </>) xs)
-              findFiles' (Set.union q' q'')
+        ignore = findFiles' q'
+        emit = do { yield x; findFiles' q' }
+        recurse =
+          do { xs <- liftIO (FS.listDirectory (filePathReal x))
+             ; let q'' = Set.fromList (map (x </>) xs)
+             ; findFiles' (Set.union q' q'')
+             }
 
         fail = throw (UnrecognizedFileType (filePathReal x))
 
-data IfM m a = IfM (m Bool) (m a)
-
-(|>) :: m Bool -> m a -> IfM m a
-(|>) = IfM
-
 -- | Select the first action from a list of alternatives.
-ifM :: Monad m => [IfM m a] -> m a -> m a
+ifM :: Monad m => [(m Bool, m a)] -> m a -> m a
 ifM ifs orElse =
 
     go ifs
@@ -161,7 +154,7 @@ ifM ifs orElse =
   where
 
     go [] = orElse
-    go ((IfM cond x) : xs) =
+    go ((cond, x) : xs) =
       do
         c <- cond
         if c then x else go xs
