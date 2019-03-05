@@ -156,6 +156,41 @@ ifThenElseM' ifs ifAllFalse =
         []             -> ifAllFalse
         (cond, x) : xs -> ifThenElseM cond x (go xs)
 
+hText :: MonadIO m => IO.Handle -> Producer' Text m ()
+hText h =
+    go
+  where
+    go =
+      do
+        chunk <- liftIO (T.hGetChunk h)
+        unless (T.null chunk) $
+          do
+            yield chunk
+            go
+
+forbidFence :: Monad m => m () -> Pipe Text Text m ()
+forbidFence failure =
+
+    go "\n"
+
+  where
+    go t =
+      do
+        chunk <- await
+        let t' = t <> LT.fromStrict chunk
+        if LT.isInfixOf forbiddenText t'
+            then Pipes.lift failure
+            else
+              do
+                yield chunk
+                let
+                    t'' = LT.takeEnd
+                            (LT.length forbiddenText - 1)
+                            t'
+                go t''
+
+    forbiddenText = "\n```"
+
 readToMarkdownTAR_1 :: MonadSafe m => FilePath' -> Producer' Text m ()
 readToMarkdownTAR_1 x =
   do
@@ -165,34 +200,10 @@ readToMarkdownTAR_1 x =
     yield newline
     yield "```"
     yield newline
-
     Pipes.withFile (filePathReal x) IO.ReadMode \h ->
-        let
-            go t =
-              do
-                chunk <- liftIO (T.hGetChunk h)
-                unless (T.null chunk) $
-                    let
-                        t' = t <> LT.fromStrict chunk
-                    in
-                        if LT.isInfixOf forbiddenText t'
-                            then throw (ContainsFence (filePathReal x))
-                            else
-                              do
-                                yield chunk
-                                let
-                                    t'' = LT.takeEnd
-                                            (LT.length forbiddenText - 1)
-                                            t'
-                                go t''
-        in
-            go "\n"
-
+        (hText h >-> forbidFence (throw (ContainsFence (filePathReal x))))
     yield "```"
     yield newline
-
-  where
-    forbiddenText = "\n```"
 
 readToMarkdownTAR_n :: MonadSafe m => Pipe FilePath' Text m ()
 readToMarkdownTAR_n =
