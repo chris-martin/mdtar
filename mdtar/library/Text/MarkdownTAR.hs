@@ -19,9 +19,9 @@ import Text.MarkdownTAR.FilePath
 import qualified System.IO as IO
 
 import Control.Exception      (Exception (displayException), throw)
-import Control.Monad          (Monad (return), forever, unless)
+import Control.Monad          (Monad, return, (>>=), forever, unless)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Bool              (Bool)
+import Data.Bool              (Bool (True, False))
 import Data.Eq                (Eq)
 import Data.Foldable          (for_)
 import Data.Function          (($), (.))
@@ -103,57 +103,57 @@ readDirAsMdtarText dir =
       chunks <- Pipes.toListM (findFiles dir >-> readToMarkdownTAR_n)
       return (LT.fromChunks chunks)
 
+isDir :: MonadIO m => FilePath -> m Bool
+isDir = liftIO . FS.doesDirectoryExist
+
 findFiles :: forall m. MonadIO m => FilePath -> Producer' FilePath' m ()
 findFiles top =
-
-    ifM [(ifDir, go)] fail
-
-  where
-
-    ifDir = liftIO (FS.doesDirectoryExist top)
-
-    go =
+    ifThenElseM (isDir top)
       do
         xs <- liftIO (FS.listDirectory top)
         findFiles' (Set.fromList (map (top </>) xs))
+      do
+        throw (NotDirectory top)
 
-    fail = throw (NotDirectory top)
+data FileType = Link | File | Dir
+
+getFileType :: MonadIO m => FilePath -> m FileType
+getFileType fp = liftIO $
+    ifThenElseM'
+        [ ( FS.pathIsSymbolicLink fp, return Link )
+        , ( FS.doesFileExist      fp, return File )
+        , ( FS.doesDirectoryExist fp, return Dir  )
+        ]
+        do
+          throw (UnrecognizedFileType fp)
 
 findFiles' :: MonadIO m => Set FilePath' -> Producer' FilePath' m ()
 findFiles' q =
 
-    for_ (Set.minView q) f
+    for_ (Set.minView q) \(x, q') -> getFileType (filePathReal x) >>= \case
 
-  where
+        -- todo: Currently for simplicity we ignore symlinks.
+        Link -> findFiles' q'
 
-    -- todo: Currently for simplicity we ignore symlinks.
+        File -> do yield x; findFiles' q'
 
-    f (x, q') = ifM [ (ifLink, ignore), (ifFile, emit), (ifDir, recurse) ] fail
+        Dir  -> do xs <- liftIO (FS.listDirectory (filePathReal x))
+                   let q'' = Set.fromList (map (x </>) xs)
+                   findFiles' (Set.union q' q'')
 
-      where
-        ifLink = liftIO $ FS.pathIsSymbolicLink $ filePathReal x
-        ifFile = liftIO $ FS.doesFileExist      $ filePathReal x
-        ifDir  = liftIO $ FS.doesDirectoryExist $ filePathReal x
+ifThenElseM :: Monad m => m Bool -> m a -> m a -> m a
+ifThenElseM cond ifTrue ifFalse =
 
-        ignore = findFiles' q'
-        emit = do { yield x; findFiles' q' }
-        recurse =
-          do { xs <- liftIO (FS.listDirectory (filePathReal x))
-             ; let q'' = Set.fromList (map (x </>) xs)
-             ; findFiles' (Set.union q' q'')
-             }
+    cond >>= \case { True -> ifTrue; False -> ifFalse }
 
-        fail = throw (UnrecognizedFileType (filePathReal x))
-
--- | Select the first action from a list of alternatives.
-ifM :: Monad m => [(m Bool, m a)] -> m a -> m a
-ifM ifs orElse =
+ifThenElseM' :: Monad m => [(m Bool, m a)] -> m a -> m a
+ifThenElseM' ifs ifAllFalse =
 
     go ifs
 
   where
 
-    go [] = orElse
+    go [] = ifAllFalse
     go ((cond, x) : xs) =
       do
         c <- cond
