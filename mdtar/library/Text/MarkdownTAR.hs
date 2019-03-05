@@ -152,12 +152,9 @@ ifThenElseM' ifs ifAllFalse =
     go ifs
 
   where
-
-    go [] = ifAllFalse
-    go ((cond, x) : xs) =
-      do
-        c <- cond
-        if c then x else go xs
+    go = \case
+        [] -> ifAllFalse
+        ((cond, x) : xs) -> cond >>= \case { True -> x; False -> go xs }
 
 readToMarkdownTAR_1 :: MonadSafe m => FilePath' -> Producer' Text m ()
 readToMarkdownTAR_1 x =
