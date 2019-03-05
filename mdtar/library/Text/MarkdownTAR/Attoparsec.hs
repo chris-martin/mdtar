@@ -6,18 +6,17 @@ module Text.MarkdownTAR.Attoparsec where
 
 -- base
 
-import Control.Applicative    ((<|>), many, liftA2, (*>), (<*), (<*>))
-import Control.Monad          (Monad (return), forever, mfilter, unless)
-import Data.Bool              (Bool, not, (&&))
-import Data.Char              (Char, isSpace)
-import Data.Eq                (Eq, (==), (/=))
-import Data.Foldable          (fold, for_)
-import Data.Function          (($), (.))
-import Data.Functor           ((<$>))
-import Data.Monoid            (Monoid (mempty))
-import Data.Semigroup         (stimes, Semigroup ((<>)))
-
-import Prelude ()
+import Control.Applicative ((<|>), many, liftA2, (*>), (<*))
+import Control.Monad       (Monad (return), mfilter)
+import Data.Bool           (not, (&&))
+import Data.Char           (Char, isSpace)
+import Data.Eq             ((/=))
+import Data.Foldable       (fold)
+import Data.Function       (($), (.))
+import Data.Functor        ((<$>))
+import Data.Monoid         (Monoid (mempty))
+import Data.Semigroup      (stimes, Semigroup ((<>)))
+import Prelude             (Integer)
 
 -- attoparsec
 
@@ -28,9 +27,7 @@ import Data.Attoparsec.Text (Parser, endOfLine)
 -- text
 
 import qualified Data.Text              as T
-import qualified Data.Text.IO           as T
 import qualified Data.Text.Lazy         as LT
-import qualified Data.Text.Lazy.IO      as LT
 import qualified Data.Text.Lazy.Builder as TB
 
 import Data.Text (Text)
@@ -90,7 +87,7 @@ pCodeIndented =
 pIndentation :: Parser Text
 pIndentation =
 
-    P.string (stimes 4 " ") <|> P.string "\t"
+    P.string (stimes (4 :: Integer) " ") <|> P.string "\t"
 
 pPath :: Parser Text
 pPath =
