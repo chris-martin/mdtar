@@ -16,7 +16,7 @@ import Prelude       ()
 import System.IO     (FilePath)
 import Text.Show     (Show)
 
--- filepath, directory
+-- filepath
 
 import qualified System.FilePath  as FS
 

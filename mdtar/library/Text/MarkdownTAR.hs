@@ -14,28 +14,19 @@ module Text.MarkdownTAR
 import Text.MarkdownTAR.Attoparsec
 import Text.MarkdownTAR.Error
 import Text.MarkdownTAR.FilePath
-import Text.MarkdownTAR.FileType
-import Text.MarkdownTAR.IfThenElse
+import Text.MarkdownTAR.FindFiles
 
 -- base
 
 import qualified System.IO as IO
 
 import Control.Exception      (throw)
-import Control.Monad          (Monad, return, (>>=), forever, unless)
+import Control.Monad          (Monad, return, forever, unless)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Foldable          (for_)
-import Data.Function          (($), (.), (&))
-import Data.List              (map)
+import Data.Function          (($), (.))
 import Data.Semigroup         (Semigroup ((<>)))
 import Prelude                ((-))
 import System.IO              (IO, FilePath)
-
--- containers
-
-import qualified Data.Set as Set
-
-import Data.Set (Set)
 
 -- text
 
@@ -56,7 +47,7 @@ import qualified Pipes.Safe.Prelude as Pipes
 import Pipes      (Pipe, Producer', (>->), await, yield)
 import Pipes.Safe (MonadSafe, runSafeT, catchP)
 
--- filepath, directory
+-- directory
 
 import qualified System.Directory as FS
 
@@ -86,29 +77,6 @@ readDirAsMdtarText dir =
     do
       chunks <- Pipes.toListM (findFiles dir >-> readToMarkdownTAR_n)
       return (LT.fromChunks chunks)
-
-findFiles :: forall m. MonadIO m => FilePath -> Producer' FilePath' m ()
-findFiles top =
-    ifThenElseM (isDir top)
-      do
-        xs <- liftIO (FS.listDirectory top)
-        findFiles' (Set.fromList (map (top </>) xs))
-      do
-        throw (err NotDirectory & setErrorFilePath top)
-
-findFiles' :: MonadIO m => Set FilePath' -> Producer' FilePath' m ()
-findFiles' q =
-
-    for_ (Set.minView q) \(x, q') -> getFileType (filePathReal x) >>= \case
-
-        -- todo: Currently for simplicity we ignore symlinks.
-        Link -> findFiles' q'
-
-        File -> do yield x; findFiles' q'
-
-        Dir  -> do xs <- liftIO (FS.listDirectory (filePathReal x))
-                   let q'' = Set.fromList (map (x </>) xs)
-                   findFiles' (Set.union q' q'')
 
 hText :: MonadIO m => IO.Handle -> Producer' Text m ()
 hText h =

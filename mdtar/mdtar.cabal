@@ -12,6 +12,7 @@ library
       , Text.MarkdownTAR.Error
       , Text.MarkdownTAR.FilePath
       , Text.MarkdownTAR.FileType
+      , Text.MarkdownTAR.FindFiles
       , Text.MarkdownTAR.IfThenElse
 
     build-depends:
