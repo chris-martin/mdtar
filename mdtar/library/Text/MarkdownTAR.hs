@@ -13,6 +13,8 @@ module Text.MarkdownTAR
 
 import Text.MarkdownTAR.Attoparsec
 import Text.MarkdownTAR.FilePath
+import Text.MarkdownTAR.IfThenElse
+
 
 -- base
 
@@ -21,7 +23,7 @@ import qualified System.IO as IO
 import Control.Exception      (Exception (displayException), throw)
 import Control.Monad          (Monad, return, (>>=), forever, unless)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Bool              (Bool (True, False))
+import Data.Bool              (Bool)
 import Data.Eq                (Eq)
 import Data.Foldable          (for_)
 import Data.Function          (($), (.))
@@ -140,21 +142,6 @@ findFiles' q =
         Dir  -> do xs <- liftIO (FS.listDirectory (filePathReal x))
                    let q'' = Set.fromList (map (x </>) xs)
                    findFiles' (Set.union q' q'')
-
-ifThenElseM :: Monad m => m Bool -> m a -> m a -> m a
-ifThenElseM cond ifTrue ifFalse =
-
-    cond >>= \case { True -> ifTrue; False -> ifFalse }
-
-ifThenElseM' :: Monad m => [(m Bool, m a)] -> m a -> m a
-ifThenElseM' ifs ifAllFalse =
-
-    go ifs
-
-  where
-    go = \case
-        []             -> ifAllFalse
-        (cond, x) : xs -> ifThenElseM cond x (go xs)
 
 hText :: MonadIO m => IO.Handle -> Producer' Text m ()
 hText h =

@@ -10,6 +10,7 @@ library
     other-modules:
         Text.MarkdownTAR.Attoparsec
       , Text.MarkdownTAR.FilePath
+      , Text.MarkdownTAR.IfThenElse
 
     build-depends:
         attoparsec
