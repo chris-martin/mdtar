@@ -9,6 +9,7 @@ library
 
     other-modules:
         Text.MarkdownTAR.Attoparsec
+      , Text.MarkdownTAR.Error
       , Text.MarkdownTAR.FilePath
       , Text.MarkdownTAR.IfThenElse
 

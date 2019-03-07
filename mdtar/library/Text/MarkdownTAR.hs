@@ -12,6 +12,7 @@ module Text.MarkdownTAR
   ) where
 
 import Text.MarkdownTAR.Attoparsec
+import Text.MarkdownTAR.Error
 import Text.MarkdownTAR.FilePath
 import Text.MarkdownTAR.IfThenElse
 
@@ -20,19 +21,16 @@ import Text.MarkdownTAR.IfThenElse
 
 import qualified System.IO as IO
 
-import Control.Exception      (Exception (displayException), throw)
+import Control.Exception      (throw)
 import Control.Monad          (Monad, return, (>>=), forever, unless)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Bool              (Bool)
-import Data.Eq                (Eq)
 import Data.Foldable          (for_)
 import Data.Function          (($), (.), (&))
-import Data.List              ((++), map)
-import Data.Maybe             (Maybe (Nothing, Just))
+import Data.List              (map)
 import Data.Semigroup         (Semigroup ((<>)))
 import Prelude                ((-))
 import System.IO              (IO, FilePath)
-import Text.Show              (Show)
 
 -- containers
 
@@ -63,52 +61,6 @@ import Pipes.Safe (MonadSafe, runSafeT, catchP)
 
 import qualified System.FilePath  as FS
 import qualified System.Directory as FS
-
-data Error = Error ErrorType ErrorDetail
-  deriving (Eq, Show)
-
-data ErrorType = NotDirectory | UnrecognizedFileType | ContainsFence
-  deriving (Eq, Show)
-
-data ErrorDetail = ErrorDetail { errorFilePath :: Maybe FilePath }
-  deriving (Eq, Show)
-
-err :: ErrorType -> Error
-err t = Error t (ErrorDetail Nothing)
-
-setErrorFilePath :: FilePath -> Error -> Error
-setErrorFilePath x (Error t d) = Error t d{ errorFilePath = Just x }
-
-instance Exception Error
-  where
-    displayException = displayError
-
-displayError (Error t d) =
-  case t of
-
-    NotDirectory ->
-      case d of
-        ErrorDetail { errorFilePath = Just x } ->
-            "Not a directory: \"" ++ x ++ "\""
-        ErrorDetail { errorFilePath = Nothing } ->
-            "Not a directory"
-
-    UnrecognizedFileType ->
-      case d of
-        ErrorDetail { errorFilePath = Just x } ->
-          "The file \"" ++ x ++ "\" is neither symlink \
-          \nor regular file nor directory"
-        ErrorDetail { errorFilePath = Nothing } ->
-          "File is neither symlink nor regular file nor directory"
-
-    ContainsFence ->
-      case d of
-        ErrorDetail { errorFilePath = Just x } ->
-          "The file \"" ++ x ++ "\" contains a Markdown fence (\"```\") \
-          \which cannot be included within a Markdown TAR"
-        ErrorDetail { errorFilePath = Nothing } ->
-          "A Markdown fence (\"```\") cannot be included \
-          \within a Markdown TAR"
 
 readDirAsList :: FilePath -> IO [(FilePath, LT.Text)]
 readDirAsList dir =
