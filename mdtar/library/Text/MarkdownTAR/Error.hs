@@ -1,7 +1,11 @@
 module Text.MarkdownTAR.Error where
 
+-- base
+
 import Control.Exception (Exception (displayException))
 import Prelude (Eq, Show, Maybe (Just, Nothing), FilePath, (++))
+
+---
 
 data Error = Error ErrorType ErrorDetail
   deriving (Eq, Show)
@@ -11,6 +15,8 @@ data ErrorType = NotDirectory | UnrecognizedFileType | ContainsFence
 
 data ErrorDetail = ErrorDetail { errorFilePath :: Maybe FilePath }
   deriving (Eq, Show)
+
+---
 
 err :: ErrorType -> Error
 err t = Error t (ErrorDetail Nothing)

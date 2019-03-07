@@ -14,8 +14,8 @@ module Text.MarkdownTAR
 import Text.MarkdownTAR.Attoparsec
 import Text.MarkdownTAR.Error
 import Text.MarkdownTAR.FilePath
+import Text.MarkdownTAR.FileType
 import Text.MarkdownTAR.IfThenElse
-
 
 -- base
 
@@ -24,7 +24,6 @@ import qualified System.IO as IO
 import Control.Exception      (throw)
 import Control.Monad          (Monad, return, (>>=), forever, unless)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Bool              (Bool)
 import Data.Foldable          (for_)
 import Data.Function          (($), (.), (&))
 import Data.List              (map)
@@ -59,8 +58,9 @@ import Pipes.Safe (MonadSafe, runSafeT, catchP)
 
 -- filepath, directory
 
-import qualified System.FilePath  as FS
 import qualified System.Directory as FS
+
+---
 
 readDirAsList :: FilePath -> IO [(FilePath, LT.Text)]
 readDirAsList dir =
@@ -87,9 +87,6 @@ readDirAsMdtarText dir =
       chunks <- Pipes.toListM (findFiles dir >-> readToMarkdownTAR_n)
       return (LT.fromChunks chunks)
 
-isDir :: MonadIO m => FilePath -> m Bool
-isDir = liftIO . FS.doesDirectoryExist
-
 findFiles :: forall m. MonadIO m => FilePath -> Producer' FilePath' m ()
 findFiles top =
     ifThenElseM (isDir top)
@@ -98,18 +95,6 @@ findFiles top =
         findFiles' (Set.fromList (map (top </>) xs))
       do
         throw (err NotDirectory & setErrorFilePath top)
-
-data FileType = Link | File | Dir
-
-getFileType :: MonadIO m => FilePath -> m FileType
-getFileType fp = liftIO $
-    ifThenElseM'
-        [ ( FS.pathIsSymbolicLink fp, return Link )
-        , ( FS.doesFileExist      fp, return File )
-        , ( FS.doesDirectoryExist fp, return Dir  )
-        ]
-        do
-          throw (err UnrecognizedFileType & setErrorFilePath fp)
 
 findFiles' :: MonadIO m => Set FilePath' -> Producer' FilePath' m ()
 findFiles' q =

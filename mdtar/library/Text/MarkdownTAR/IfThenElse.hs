@@ -4,6 +4,8 @@ module Text.MarkdownTAR.IfThenElse where
 
 import Prelude (Bool (True, False), Monad, (>>=))
 
+---
+
 ifThenElseM :: Monad m => m Bool -> m a -> m a -> m a
 ifThenElseM cond ifTrue ifFalse =
 

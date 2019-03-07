@@ -32,6 +32,8 @@ import qualified Data.Text.Lazy.Builder as TB
 
 import Data.Text (Text)
 
+---
+
 buildText :: TB.Builder -> Text
 buildText = LT.toStrict . TB.toLazyText
 

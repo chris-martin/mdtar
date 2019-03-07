@@ -11,6 +11,7 @@ library
         Text.MarkdownTAR.Attoparsec
       , Text.MarkdownTAR.Error
       , Text.MarkdownTAR.FilePath
+      , Text.MarkdownTAR.FileType
       , Text.MarkdownTAR.IfThenElse
 
     build-depends:
