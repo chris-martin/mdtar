@@ -19,7 +19,6 @@ import Text.Show     (Show)
 -- filepath, directory
 
 import qualified System.FilePath  as FS
-import qualified System.Directory as FS
 
 -- text
 
