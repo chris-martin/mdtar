@@ -26,8 +26,9 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Bool              (Bool)
 import Data.Eq                (Eq)
 import Data.Foldable          (for_)
-import Data.Function          (($), (.))
+import Data.Function          (($), (.), (&))
 import Data.List              ((++), map)
+import Data.Maybe             (Maybe (Nothing, Just))
 import Data.Semigroup         (Semigroup ((<>)))
 import Prelude                ((-))
 import System.IO              (IO, FilePath)
@@ -56,29 +57,58 @@ import qualified Pipes.Prelude      as Pipes
 import qualified Pipes.Safe.Prelude as Pipes
 
 import Pipes      (Pipe, Producer', (>->), await, yield)
-import Pipes.Safe (MonadSafe, runSafeT)
+import Pipes.Safe (MonadSafe, runSafeT, catchP)
 
 -- filepath, directory
 
 import qualified System.FilePath  as FS
 import qualified System.Directory as FS
 
-data Error
-  = NotDirectory FilePath
-  | UnrecognizedFileType FilePath
-  | ContainsFence FilePath
+data Error = Error ErrorType ErrorDetail
   deriving (Eq, Show)
+
+data ErrorType = NotDirectory | UnrecognizedFileType | ContainsFence
+  deriving (Eq, Show)
+
+data ErrorDetail = ErrorDetail { errorFilePath :: Maybe FilePath }
+  deriving (Eq, Show)
+
+err :: ErrorType -> Error
+err t = Error t (ErrorDetail Nothing)
+
+setErrorFilePath :: FilePath -> Error -> Error
+setErrorFilePath x (Error t d) = Error t d{ errorFilePath = Just x }
 
 instance Exception Error
   where
-    displayException (NotDirectory x) =
-        "Not a directory: \"" ++ x ++ "\""
-    displayException (UnrecognizedFileType x) =
-        "The file \"" ++ x ++ "\" is neither symlink \
-        \nor regular file nor directory"
-    displayException (ContainsFence x) =
-        "The file \"" ++ x ++ "\" contains a Markdown fence (\"```\") \
-        \which cannot be included within a Markdown TAR"
+    displayException = displayError
+
+displayError (Error t d) =
+  case t of
+
+    NotDirectory ->
+      case d of
+        ErrorDetail { errorFilePath = Just x } ->
+            "Not a directory: \"" ++ x ++ "\""
+        ErrorDetail { errorFilePath = Nothing } ->
+            "Not a directory"
+
+    UnrecognizedFileType ->
+      case d of
+        ErrorDetail { errorFilePath = Just x } ->
+          "The file \"" ++ x ++ "\" is neither symlink \
+          \nor regular file nor directory"
+        ErrorDetail { errorFilePath = Nothing } ->
+          "File is neither symlink nor regular file nor directory"
+
+    ContainsFence ->
+      case d of
+        ErrorDetail { errorFilePath = Just x } ->
+          "The file \"" ++ x ++ "\" contains a Markdown fence (\"```\") \
+          \which cannot be included within a Markdown TAR"
+        ErrorDetail { errorFilePath = Nothing } ->
+          "A Markdown fence (\"```\") cannot be included \
+          \within a Markdown TAR"
 
 readDirAsList :: FilePath -> IO [(FilePath, LT.Text)]
 readDirAsList dir =
@@ -115,7 +145,7 @@ findFiles top =
         xs <- liftIO (FS.listDirectory top)
         findFiles' (Set.fromList (map (top </>) xs))
       do
-        throw (NotDirectory top)
+        throw (err NotDirectory & setErrorFilePath top)
 
 data FileType = Link | File | Dir
 
@@ -127,7 +157,7 @@ getFileType fp = liftIO $
         , ( FS.doesDirectoryExist fp, return Dir  )
         ]
         do
-          throw (UnrecognizedFileType fp)
+          throw (err UnrecognizedFileType & setErrorFilePath fp)
 
 findFiles' :: MonadIO m => Set FilePath' -> Producer' FilePath' m ()
 findFiles' q =
@@ -155,8 +185,8 @@ hText h =
             yield chunk
             go
 
-forbidFence :: Monad m => m () -> Pipe Text Text m ()
-forbidFence failure =
+forbidFence :: Monad m => Pipe Text Text m ()
+forbidFence =
 
     go "\n"
 
@@ -166,7 +196,7 @@ forbidFence failure =
         chunk <- await
         let t' = t <> LT.fromStrict chunk
         if LT.isInfixOf forbiddenText t'
-            then Pipes.lift failure
+            then throw (err ContainsFence)
             else
               do
                 yield chunk
@@ -181,16 +211,20 @@ forbidFence failure =
 readToMarkdownTAR_1 :: MonadSafe m => FilePath' -> Producer' Text m ()
 readToMarkdownTAR_1 x =
   do
-    yield "## "
-    yield (T.pack (filePathAlias x))
-    yield newline
-    yield newline
-    yield "```"
-    yield newline
-    Pipes.withFile (filePathReal x) IO.ReadMode \h ->
-        (hText h >-> forbidFence (throw (ContainsFence (filePathReal x))))
-    yield "```"
-    yield newline
+      yield "## "
+      yield (T.pack (filePathAlias x))
+      yield newline
+      yield newline
+      yield "```"
+      yield newline
+
+      Pipes.withFile (filePathReal x) IO.ReadMode \h ->
+          (hText h >-> forbidFence)
+
+      yield "```"
+      yield newline
+
+  `catchP` (throw . setErrorFilePath (filePathReal x))
 
 readToMarkdownTAR_n :: MonadSafe m => Pipe FilePath' Text m ()
 readToMarkdownTAR_n =
